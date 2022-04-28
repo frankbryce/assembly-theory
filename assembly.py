@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import cache
 import sys
 from tqdm import tqdm
 
@@ -29,7 +30,8 @@ class Path:
     def __str__(self) -> str:
         return f'index of {self.Index()}: {self.obj}'
 
-    def Index(self, exists: set[Path] = set()) -> int:
+    @cache
+    def Index(self, exists: tuple[Path] = tuple()) -> int:
         l = self.left
         r = self.right
         if (not l and r) or (l and not r):
@@ -41,13 +43,13 @@ class Path:
         lr_idx = 1  # take into account this assembly step.
         if l not in exists:
             lr_idx += l.Index()
-        lr_idx += r.Index(exists | l.bks)
+        lr_idx += r.Index(exists + tuple(l.bks))
 
         # assemble left from right's building blocks
         rl_idx = 1
         if r not in exists:
             rl_idx += r.Index()
-        rl_idx += l.Index(exists | r.bks)
+        rl_idx += l.Index(exists + tuple(r.bks))
 
         return min(lr_idx, rl_idx)
 
