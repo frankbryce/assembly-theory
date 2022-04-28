@@ -15,3 +15,11 @@ index of 7: (((a|b)|(r|a))|((c|(a|d))|((a|b)|(r|a))))
 index of 7: ((a|(b|(r|a)))|((c|(a|d))|(a|(b|(r|a)))))
 index of 7: ((a|(b|(r|a)))|((c|a)|(d|(a|(b|(r|a))))))
 ```
+
+## Dependencies
+
+This isn't a super involved repo (yet), but I do put the modest dependencies in a requirements.txt file
+
+```bash
+$ python3 -m pip install -r requirements.txt
+```

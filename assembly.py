@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import sys
+from tqdm import tqdm
+
 class Path:
     obj: str
     bks: set[Path]  # for caching only
@@ -63,7 +66,7 @@ def MinStrPaths(s: str) -> list[Path]:
     layers: list[set[Path]] = list()
     atoms = set([Path.Atom(c) for c in s])
     layers.append(atoms)
-    for l in range(1,len(s)):
+    for l in tqdm(range(1,len(s)), "Generating Paths: "):
         next_layer = set()
         for i in range(int((l+1)/2)):
             l1 = layers[i]
@@ -73,7 +76,7 @@ def MinStrPaths(s: str) -> list[Path]:
     
     minPaths = list()
     minIdx = len(s)+1
-    for path in layers[len(s)-1]:
+    for path in tqdm(layers[len(s)-1], "Looking for min index"):
         pidx = path.Index()
         if pidx < minIdx:
             minIdx = pidx
@@ -99,6 +102,11 @@ def genearateAbracadabra() -> Path:
     print(abracadabra)
 
 if __name__ == "__main__":
-    print("print all min assembly paths for 'abracadabra'")
-    for path in MinStrPaths('abracadabra'):
+    if len(sys.argv) == 1:
+        assemble_str = 'abracadabra'
+    else:
+        assemble_str = sys.argv[1]
+    print(f"print all min assembly paths for '{assemble_str}'")
+    for path in MinStrPaths(assemble_str):
         print(path)
+
