@@ -11,23 +11,25 @@ class Path:
         self.obj = obj
         self.left = left
         self.right = right
-        self.bks = set([obj])
         max_idx = 0
         if left:
             max_idx = max(max_idx, 1 + left.idx)
-            self.bks |= left.bks
         if right:
             max_idx = max(max_idx, 1 + right.idx)
-            self.bks |= right.bks
         self.idx = max_idx
+        self.bks = set([self])
+        if left:
+            self.bks |= left.bks
+        if right:
+            self.bks |= right.bks
 
     def __eq__(self, other: Path):
         return self.__hash__() == other.__hash__()
 
     def __hash__(self):
-        lhash = 0 if not self.left else left.__hash__()
-        rhash = 0 if not self.right else right.__hash__()
-        hash((idx,obj,lhash,rhash))
+        lhash = 0 if not self.left else self.left.__hash__()
+        rhash = 0 if not self.right else self.right.__hash__()
+        return hash((self.idx,self.obj,lhash,rhash))
 
     def __str__(self):
         return f'index of {self.idx}: {self.obj}'
