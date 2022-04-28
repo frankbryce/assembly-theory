@@ -3,6 +3,8 @@ Working on algorithm to find complexity of strings by https://en.wikipedia.org/w
 
 Using this algorithm, I discovered there are many assembly paths for abracadabra of index 7.
 
+Feel free to pass in strings of your own, or send pull requests! Example outputs below.
+
 ```bash
 $ python3 assembly.py 
 print all min assembly paths for 'abracadabra'
