@@ -63,7 +63,9 @@ class Path:
         return hash((self.obj,tuple(sorted(self.bks))))
 
     def __str__(self) -> str:
-        return f'{self.idx}:{self.obj}'
+        if not self.left:
+            return f'{self.idx}:{self.obj}'
+        return f'{self.idx}:({self.left}|{self.right})'
 
     @cache
     def Index(self, exists: tuple[Assembly] = tuple()) -> int:
