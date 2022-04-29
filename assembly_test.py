@@ -8,6 +8,7 @@ class TestPath(unittest.TestCase):
         ["abracadabra", 7],
         ["hello world", 10],
         ["iseethreeintree", 11],
+        ["abeeceedeeeeffgee", 12],
     ])
     def testMinStrPaths(self, s, idx):
         paths = assembly.MinStrPaths(s)
