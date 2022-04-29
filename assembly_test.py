@@ -5,6 +5,8 @@ import unittest
 class TestPath(unittest.TestCase):
 
     @parameterized.expand([
+        ["sdfsdf", 3],
+        ["sdfsdfsdfsdf", 4],
         ["abracadabra", 7],
         ["hello world", 10],
         ["iseethreeintree", 11],

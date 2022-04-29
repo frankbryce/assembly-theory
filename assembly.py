@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from functools import cache
+from functools import lru_cache
+cache = lru_cache(maxsize=None)
 import sys
 from tqdm import tqdm
 
@@ -41,21 +42,6 @@ class Path:
             self.bks |= left.bks
             self.bks |= right.bks
 
-        if not left:
-            self.idx = 0  # this is an atom
-        else:
-            # assemble right from left's building blocks
-            lr_idx = 1  # take into account this assembly step.
-            lr_idx += left.idx
-            lr_idx += right.Index(tuple(sorted(left.bks)))
-    
-            # assemble left from right's building blocks
-            rl_idx = 1
-            rl_idx += right.idx
-            rl_idx += left.Index(tuple(sorted(right.bks)))
-
-            self.idx = min(lr_idx, rl_idx)
-
     def __eq__(self, other: Path) -> bool:
         return self.__hash__() == other.__hash__()
 
@@ -64,11 +50,14 @@ class Path:
 
     def __str__(self) -> str:
         if not self.left:
-            return f'{self.idx}:{self.obj}'
-        return f'{self.idx}:({self.left}|{self.right})'
+            return f'{self.Index()}:{self.obj}'
+        return f'{self.Index()}:({self.left}|{self.right})'
 
     @cache
     def Index(self, exists: tuple[Assembly] = tuple()) -> int:
+        if self.obj in exists:
+            return 0
+
         l = self.left
         r = self.right
         if (not l and r) or (l and not r):
@@ -77,16 +66,14 @@ class Path:
             return 0  # this is an atom
 
         # assemble right from left's building blocks
-        lr_idx = 1  # take into account this assembly step.
-        if l.obj not in exists:
-            lr_idx += l.idx
-        lr_idx += r.Index(tuple(sorted(exists + tuple(l.bks))))
+        lidx = l.Index()
+        ridx = r.Index(tuple(sorted(exists + tuple(l.bks))))
+        lr_idx = ridx+lidx+1
 
         # assemble left from right's building blocks
-        rl_idx = 1
-        if r.obj not in exists:
-            rl_idx += r.idx
-        rl_idx += l.Index(tuple(sorted(exists + tuple(r.bks))))
+        ridx = r.Index()
+        lidx = l.Index(tuple(sorted(exists + tuple(r.bks))))
+        rl_idx = ridx+lidx+1
 
         return min(lr_idx, rl_idx)
 
