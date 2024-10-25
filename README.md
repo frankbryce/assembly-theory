@@ -4,7 +4,7 @@ Working on algorithm to find complexity of arbitrary assemblies, modeled by netw
 
 The current version of this models the differences between assemblies and string assemblies, and separates out the assembled object from its history, and abstracts the idea of construction to a lambda which can take parent assemblies as arguments.
 
-## Overall Structure
+## Overview of Code Structure
 
 * `History` objects hold information about the lineage of an assembly. To make a `History` object, you need to pass in a set of assemblies, an (optional) parent, and a constructor.
   * If a parent is not specified, all assemblies must be atoms.
