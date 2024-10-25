@@ -57,19 +57,6 @@ def GenStrAsmIdx(s: str, debug: bool = False) -> Iterator[History]:
 
     best_hist = []
     best_asm_idx = len(s) + 1
-
-    def try_update_best_hist(h: History, t: StringAssembly) -> bool:
-        nonlocal best_asm_idx
-        nonlocal best_hist
-        if h.asm == t:
-            if h.asm_idx < best_asm_idx:
-                best_hist = h
-                best_asm_idx = h.asm_idx
-                if debug:
-                    print(f"New best:\n{best_hist}\n")
-                return True
-        return False
-
     ctors = [StrAppendCtor, StrPrependCtor]
 
     cnt = 0
