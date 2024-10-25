@@ -1,30 +1,58 @@
 from __future__ import annotations
 
-from functools import lru_cache
-cache = lru_cache(maxsize=None)
 import networkx as nx
-import sys
-from tqdm import tqdm
+from typing import Callable, List
 
 class Assembly:
-    atoms: nx.MultiGraph
+    graph: nx.Graph
+    atoms: list[tuple[int, dict[str, str]]]
+    _global_atom_id: int = 1  # Global variable to track unique atom IDs across all assemblies
+    _global_atom_map: dict[int, nx.Graph] = dict()
 
-    @staticmethod
-    def Atom(element: str):
-        ret = Assembly()
-        ret.atoms = nx.MultiGraph()
-        ret.atoms.add_nodes_from([(0, {'element': element})])
+    @classmethod
+    def Atom(cls, element: str):
+        ret = cls()
+        ret.graph = nx.Graph()
+        ret.graph.add_nodes_from([(Assembly._global_atom_id, {'element': element})])
+        ret.atoms = [(node, data) for node, data in ret.graph.nodes(data=True)]
+        Assembly._global_atom_map[Assembly._global_atom_id] = ret.atoms
+        Assembly._global_atom_id += 1
         return ret
 
-    @staticmethod
-    def Concat(left: Assembly, right: Assembly) -> Assembly:
-        ret = Assembly()
-        lsz = len(left.atoms)
-        rsz = len(right.atoms)
-        rcpy = right.atoms.copy()
-        nx.relabel_nodes(rcpy, dict([(i,i+lsz) for i in range(rsz)]), copy=False)
-        ret.atoms = nx.compose(left.atoms,rcpy)
-        ret.atoms.add_edge(lsz-1,lsz)
+    @classmethod
+    def Join(cls, asms: list[Assembly], edges: list[tuple[int, int]]) -> Assembly:
+        if len(asms) == 0:
+            raise ValueError("Cannot join an empty list of assemblies")
+        
+        asm_type = asms[0].__class__
+        for asm in asms[1:]:
+            if asm.__class__ != asm_type:
+                raise ValueError("All assemblies must be of the same type")
+
+        # copy the assemblies and map the atoms
+        edge_map = dict()
+        cloned_asms = list()
+        for asm in asms:
+            cloned_asm, new_map = cls.CopyAndMap(asm)
+            for k,v in new_map.items():
+                edge_map[k] = v
+            cloned_asms.append(cloned_asm)
+        asms = cloned_asms
+
+        # compose the assembly graphs
+        last_asm = asms[0]
+        ret = cls()
+        ret.atoms = last_asm.atoms
+        for asm in asms[1:]:
+            ret.graph = nx.compose(last_asm.graph, asm.graph)
+            ret.atoms += asm.atoms
+            last_asm = asm
+
+        # add the new edges based on the node mapping done earlier
+        for edge in edges:
+            edge = (edge_map[edge[0]], edge_map[edge[1]])
+            ret.graph.add_edge(edge[0], edge[1])
+
         return ret
 
     def is_atom(self) -> bool:
@@ -37,123 +65,131 @@ class Assembly:
         return self.__hash__() == other.__hash__()
         
     def __hash__(self):
-        return int(nx.weisfeiler_lehman_graph_hash(self.atoms, node_attr='element'),16)
+        return int(nx.weisfeiler_lehman_graph_hash(self.graph, node_attr='element'), 16)
 
     def __str__(self) -> str:
-        return ''.join([a['element'] for _,a in sorted(self.atoms.nodes(data=True), key=lambda n: n[0])])
+        return str(self.graph.nodes(data=True))
 
-class Path:
-    idx: int
-    asm: Assembly
-    bks: set[Assembly]  # cache of blocks used to build this path
-    left: Path
-    right: Path
 
-    def __init__(self, asm: Assembly, left: Path, right: Path) -> Path:
-        self.asm = asm
-        self.left = left
-        self.right = right
-        if (not left and right) or (left and not right):
-            raise ValueError('must specify both left and right, or neither.')
-        self.bks = set([asm])
-        if left:
-            self.bks |= left.bks
-            self.bks |= right.bks
+    @classmethod
+    def Copy(cls, asm: Assembly) -> Assembly:
+        return cls.CopyAndMap(asm)[0]
 
-    def __eq__(self, other: Path) -> bool:
+    @classmethod
+    def CopyAndMap(cls, asm: Assembly) -> tuple[Assembly, dict[int, int]]:
+        ret = cls()
+        ret.atoms = list()
+        old_to_new = dict()
+        for atom in asm.atoms:
+            cloned = cls.Atom(atom[1]['element'])
+            old_to_new[atom[0]] = cloned.atoms[0][0]
+            ret.atoms.append(cloned.atoms[0])
+        ret.graph = nx.relabel_nodes(asm.graph, old_to_new)
+        return ret, old_to_new
+
+class StringAssembly(Assembly):
+
+    @staticmethod
+    def Create(s: str) -> StringAssembly:
+        assembly = None
+        for c in s:
+            atom = StringAssembly.Atom(c)
+            if assembly:
+                assembly = StringAssembly.Concat(assembly, atom)
+            else:
+                assembly = atom
+        return assembly
+
+    def Append(self, right: StringAssembly) -> StringAssembly:
+        left = self
+        return self.__class__.Join([left, right],
+                                   [(left.atoms[-1][0], right.atoms[0][0])])
+
+    def __lt__(self, other: StringAssembly) -> bool:
+        return self.__hash__() < other.__hash__()
+
+    def __eq__(self, other: StringAssembly) -> bool:
         return self.__hash__() == other.__hash__()
-
-    def __hash__(self) -> int:
-        return hash((self.asm,tuple(sorted(self.bks))))
+        
+    def __hash__(self):
+        return self.__str__().__hash__()
 
     def __str__(self) -> str:
-        if not self.left:
-            return f'{self.Index()}:{self.asm}'
-        return f'{self.Index()}:({self.left}|{self.right})'
+        return ''.join([a['element'] for _,a in sorted(self.graph.nodes(data=True), key=lambda n: n[0])])
 
-    @cache
-    def Index(self, exists: tuple[Assembly] = tuple()) -> int:
-        if self.asm in exists:
-            return 0
 
-        l = self.left
-        r = self.right
-        if (not l and r) or (l and not r):
-            raise ValueError('Invalid State: had only one of self.left and self.right set')
-        if not l and not r:
-            return 0  # this is an atom
+class History:
+    asm_idx: int
+    asm: Assembly
+    ctor_asms: list[Assembly]  
+    population: set[Assembly]
+    parent: History
+    constructor: Callable[[History | None, List[Assembly] | None], Assembly]
 
-        # assemble right from left's building blocks
-        lidx = l.Index()
-        ridx = r.Index(tuple(sorted(exists + tuple(l.bks))))
-        lr_idx = ridx+lidx+1
+    def __init__(self,
+                 constructor: Callable[[History | None, List[Assembly] | None], Assembly],
+                 *ctor_asms: list[Assembly | History],
+                 parent: History | None = None) -> None:
+        self.constructor = constructor
+        self.parent = parent
 
-        # assemble left from right's building blocks
-        ridx = r.Index()
-        lidx = l.Index(tuple(sorted(exists + tuple(r.bks))))
-        rl_idx = ridx+lidx+1
+        self.population = set()
+        if parent:
+            self.population.update(parent.population)
 
-        return min(lr_idx, rl_idx)
+        for asm in ctor_asms:
+            if (not issubclass(asm.__class__, Assembly) and
+                not issubclass(asm.__class__, History)):
+                raise ValueError("All assemblies must be of type Assembly or History")
+            if issubclass(asm.__class__, History):
+                asm = asm.asm
+            if asm.is_atom():
+                continue
+            if asm not in self.population:
+                raise ValueError("All assemblies must be atoms or from the history's population")
 
-    @staticmethod
-    def From(a: Assembly) -> Path:
-        if not a.is_atom():
-            raise ValueError("From() must be called with an Atom Assembly")
-        return Path(a, None, None)
+        self.asm = constructor(parent,
+                               [asm if not issubclass(asm.__class__, History) else asm.asm
+                                for asm in ctor_asms])
+        self.ctor_asms = ctor_asms
+        self.asm_idx = parent.asm_idx + 1 if parent else 0
+        self.population.add(self.asm)
 
-    # This algorithm assumes linear, ordered assemblies (aka strings)
-    @staticmethod
-    def Concat(left: Path,
-               right: Path) -> Path:
-        return Path(Assembly.Concat(left.asm,right.asm), left, right)
+    def __str__(self) -> str:
+        if self.parent:
+            ret = f"H[{self.asm_idx}]: {self.asm}, ("
+            ret += f"{', '.join([str(asm) if not issubclass(asm.__class__, History) else str(asm.asm) for asm in self.ctor_asms])}"
+            ret += ")\n"
+            ret += f"{self.parent}"
+            return ret
+        else:
+            return f"H[{self.asm_idx}]: {self.asm}"
 
-def MinStrPaths(s: str) -> list[Path]:
-    layers: list[set[Path]] = list()
-    atoms = set([Path.From(Assembly.Atom(c)) for c in s])
-    layers.append(atoms)
-    for l in tqdm(range(1,len(s)), "Generating Paths: "):
-        next_layer = set()
-        for i in range(int((l+1)/2)):
-            l1 = layers[i]
-            l2 = layers[l-i-1]
-            next_layer |= set([
-                Path.Concat(o1,o2)
-                for o1 in l1 for o2 in l2 if str(o1.asm)+str(o2.asm) in s])
-        layers.append(next_layer)
+# Pre-made constructors for convenience
+def AtomCtor(_, asms: list[Assembly]) -> Assembly:
+    if len(asms) != 1:
+        raise ValueError("AtomCtor expects exactly one assembly")
+    return asms[0]
 
-    minPaths = list()
-    minIdx = len(s)+1
-    for path in tqdm(layers[len(s)-1], "Looking for min index"):
-        pidx = path.Index()
-        if pidx < minIdx:
-            minIdx = pidx
-            minPaths = [path]
-        elif pidx == minIdx:
-            minPaths.append(path)
-    return minPaths
+def StrAppendCtor(p: History, asms: list[Assembly]) -> Assembly:
+    if len(asms) != 1:
+        raise ValueError("StrAppendCtor expects exactly one assembly")
+    return p.asm.Append(asms[0])
 
-def generateAbracadabra() -> Path:
-    # generate and return the Path that represents 'abracadabra'
-    a = Path.From(Assembly.Atom('a')) # idx = 0
-    b = Path.From(Assembly.Atom('b')) # idx = 0
-    r = Path.From(Assembly.Atom('r')) # idx = 0
-    c = Path.From(Assembly.Atom('c')) # idx = 0
-    d = Path.From(Assembly.Atom('d')) # idx = 0
-    ab = Path.Concat(a,b) # idx = 1
-    abr = Path.Concat(ab,r) # idx = 2
-    abra = Path.Concat(abr,a) # idx = 3
-    abrac = Path.Concat(abra,c) # idx = 4
-    abraca = Path.Concat(abrac,a) # idx = 5
-    abracad = Path.Concat(abraca,d) # idx = 6
-    abracadabra = Path.Concat(abracad,abra) # idx = 7
-    print(abracadabra)
+# type aliases
+StrAtom = StringAssembly.Atom
 
 if __name__ == "__main__":
-    if len(sys.argv) == 1:
-        assemble_str = 'abracadabra'
-    else:
-        assemble_str = sys.argv[1]
-    print(f"print all min assembly paths for '{assemble_str}'")
-    for path in MinStrPaths(assemble_str):
-        print(path)
-
+    a = History(AtomCtor, StrAtom('a'))
+    b = History(AtomCtor, StrAtom('b'))
+    r = History(AtomCtor, StrAtom('r'))
+    c = History(AtomCtor, StrAtom('c'))
+    d = History(AtomCtor, StrAtom('d'))
+    ab = History(StrAppendCtor, b, parent=a)
+    abr = History(StrAppendCtor, r, parent=ab)
+    abra = History(StrAppendCtor, a, parent=abr)
+    abrac = History(StrAppendCtor, c, parent=abra)
+    abraca = History(StrAppendCtor, a, parent=abrac)
+    abracad = History(StrAppendCtor, d, parent=abraca)
+    abracadabra = History(StrAppendCtor, abra, parent=abracad)
+    print(abracadabra)
