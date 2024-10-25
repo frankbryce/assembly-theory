@@ -69,6 +69,9 @@ class Assembly:
 
     def __str__(self) -> str:
         return str(self.graph.nodes(data=True))
+    
+    def __len__(self) -> int:
+        return len(self.atoms)
 
 
     @classmethod
@@ -95,7 +98,7 @@ class StringAssembly(Assembly):
         for c in s:
             atom = StringAssembly.Atom(c)
             if assembly:
-                assembly = StringAssembly.Concat(assembly, atom)
+                assembly = assembly.Append(atom)
             else:
                 assembly = atom
         return assembly
@@ -157,10 +160,10 @@ class History:
 
     def __str__(self) -> str:
         if self.parent:
-            ret = f"H[{self.asm_idx}]: {self.asm}, ("
+            ret = f"{self.parent}\n"
+            ret += f"H[{self.asm_idx}]: {self.asm}, ("
             ret += f"{', '.join([str(asm) if not issubclass(asm.__class__, History) else str(asm.asm) for asm in self.ctor_asms])}"
-            ret += ")\n"
-            ret += f"{self.parent}"
+            ret += ")"
             return ret
         else:
             return f"H[{self.asm_idx}]: {self.asm}"
@@ -175,6 +178,11 @@ def StrAppendCtor(p: History, asms: list[Assembly]) -> Assembly:
     if len(asms) != 1:
         raise ValueError("StrAppendCtor expects exactly one assembly")
     return p.asm.Append(asms[0])
+
+def StrPrependCtor(p: History, asms: list[Assembly]) -> Assembly:
+    if len(asms) != 1:
+        raise ValueError("StrPrependCtor expects exactly one assembly")
+    return asms[0].Append(p.asm)
 
 # type aliases
 StrAtom = StringAssembly.Atom

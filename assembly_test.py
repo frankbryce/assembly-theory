@@ -1,8 +1,7 @@
 from assembly import History, AtomCtor, StrAppendCtor, StrAtom
-# from parameterized import parameterized
 import unittest
 
-class TestPath(unittest.TestCase):
+class TestAssembly(unittest.TestCase):
 
     def testStringConcat(self):
         a = StrAtom('a')
@@ -52,20 +51,6 @@ class TestPath(unittest.TestCase):
         abracadabra = History(StrAppendCtor, abra, parent=abracad)
         self.assertEqual(str(abracadabra.asm), 'abracadabra')
         self.assertEqual(abracadabra.asm_idx, 7)
-
-    # @parameterized.expand([
-    #     ["sdfsdf", 3],
-    #     ["sdfsdfsdfsdf", 4],
-    #     ["abracadabra", 7],
-    #     ["hello world", 10],
-    #     ["iseethreeintree", 11],
-    #     ["abeeceedeeeeffgee", 12],
-    # ])
-    # def testMinStrPaths(self, s, idx):
-    #     paths = assembly.MinStrPaths(s)
-    #     self.assertNotEqual(len(paths), 0)
-    #     for path in paths:
-    #         self.assertEqual(path.Index(), idx)
 
 if __name__ == '__main__':
     unittest.main()
