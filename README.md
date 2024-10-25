@@ -15,10 +15,35 @@ I have a few tests written, which can be run with the following command:
 $ python -m unittest assembly_test.py
 ```
 
+Here is some example code you can after importing `assembly.py`. This is what `assembly.py` does if you execute it
+directly. The `History` object holds information necessary to remember the lineage of an assembly. A given assembly may be
+constructed by many different `History`s.
+
+```py
+# AtomCtor is a basic constructor for a single atom.
+# StrAtom is an alias for StringAssembly.Atom
+a = History(AtomCtor, StrAtom('a'))
+b = History(AtomCtor, StrAtom('b'))
+r = History(AtomCtor, StrAtom('r'))
+c = History(AtomCtor, StrAtom('c'))
+d = History(AtomCtor, StrAtom('d'))
+
+# StrAppendCtor is a constructor for appending an atom to a history's assembly.
+# if the assembly passed in is not in the parent assembly, it will raise an error..
+ab = History(StrAppendCtor, b, parent=a)
+abr = History(StrAppendCtor, r, parent=ab)
+abra = History(StrAppendCtor, a, parent=abr)
+abrac = History(StrAppendCtor, c, parent=abra)
+abraca = History(StrAppendCtor, a, parent=abrac)
+abracad = History(StrAppendCtor, d, parent=abraca)
+abracadabra = History(StrAppendCtor, abra, parent=abracad)
+print(abracadabra)
+```
+
 Currently, the output of assembly.py is a basic history of the example string from the wikipedia article.
 
 <details>
-<summary>assembly.py example output</summary>
+<summary>`assembly.py` example output</summary>
 
 ```bash
 $ python3 assembly.py
@@ -43,12 +68,23 @@ quite slow for long strings, so the tests take a while to run (several minutes).
 $ python -m unittest index_test.py
 ```
 
+Here is code you can run after importing `index.py` to see the output. This is what
+`index.py` runs if you execute it directly.
+
+```py
+# This will yield History objects as new best histories are found for lowering
+# the assembly index. There are other objects in this file, but are meant for
+# internal use. GenStrAsmIdx = "generator of string assembly indices".
+for hist in GenStrAsmIdx(s):  #, debug=True):  # if you want to see the debug output
+    print(f"New Best:\n{hist}\n")
+```
+
 Currently, the output of `index.py` is generator outputing the next
 best history to construct the target string. You can pass in a target
 string or `abracadabra` is set as the default.
 
 <details>
-<summary>index.py example output</summary>
+<summary>`index.py` example output</summary>
 
 ```bash
 $ python3 index.py
