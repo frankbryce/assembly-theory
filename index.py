@@ -46,7 +46,7 @@ class StrAsmIdxCache:
 
 def GenStrAsmIdx(s: str, debug: bool = False) -> Iterator[History]:
     target = StringAssembly.Create(s)
-    hists = [History(AtomCtor, StrAtom(c)) for c in s]
+    hists = [History(AtomCtor(StrAtom(c))) for c in s]
     atoms = set([StrAtom(c) for c in s])
 
     # create a priority queue of StrAsmIdxCache objects
@@ -68,7 +68,7 @@ def GenStrAsmIdx(s: str, debug: bool = False) -> Iterator[History]:
         cache = heapq.heappop(pq)
         for asm in (cache.hist.population | atoms):
             for ctor in ctors:
-                ctor_hist = History(ctor, asm, parent=cache.hist)
+                ctor_hist = History(ctor(asm), parent=cache.hist)
 
                 if ctor_hist.asm == target:
                     if ctor_hist.asm_idx < best_asm_idx:

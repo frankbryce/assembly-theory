@@ -121,40 +121,61 @@ class StringAssembly(Assembly):
         return ''.join([a['element'] for _,a in sorted(self.graph.nodes(data=True), key=lambda n: n[0])])
 
 
-class History:
-    asm_idx: int
-    asm: Assembly
-    ctor_asms: list[Assembly]  
-    population: set[Assembly]
-    parent: History
-    constructor: Callable[[History | None, List[Assembly] | None], Assembly]
+class Constructor:
+    asms: list[Assembly]
 
-    def __init__(self,
-                 constructor: Callable[[History | None, List[Assembly] | None], Assembly],
-                 *ctor_asms: list[Assembly | History],
-                 parent: History | None = None) -> None:
-        self.constructor = constructor
-        self.parent = parent
-
-        self.population = set()
-        if parent:
-            self.population.update(parent.population)
-
-        for asm in ctor_asms:
+    def __init__(self, *asms: Assembly) -> None:
+        for asm in asms:
             if (not issubclass(asm.__class__, Assembly) and
                 not issubclass(asm.__class__, History)):
                 raise ValueError("All assemblies must be of type Assembly or History")
-            if issubclass(asm.__class__, History):
-                asm = asm.asm
+
+        self.asms = [asm if not issubclass(asm.__class__, History) else asm.asm
+                     for asm in asms]
+
+    def __call__(self, _: Assembly) -> Assembly:
+        raise NotImplementedError("Subclasses must implement this method")
+
+class AtomCtor(Constructor):
+    def __call__(self, _: Assembly) -> Assembly:
+        if len(self.asms) != 1:
+            raise ValueError("AtomCtor expects exactly one assembly")
+        return self.asms[0]
+    
+class StrAppendCtor(Constructor):
+    def __call__(self, p: Assembly) -> Assembly:
+        if len(self.asms) != 1:
+            raise ValueError("StrAppendCtor expects exactly one assembly")
+        return p.Append(self.asms[0])
+
+class StrPrependCtor(Constructor):
+    def __call__(self, p: Assembly) -> Assembly:
+        if len(self.asms) != 1:
+            raise ValueError("StrPrependCtor expects exactly one assembly")
+        return self.asms[0].Append(p)
+
+
+class History:
+    asm_idx: int
+    asm: Assembly
+    population: set[Assembly]
+    parent: History
+    constructor: Constructor
+
+    def __init__(self,
+                 constructor: Constructor,
+                 parent: History | None = None) -> None:
+        self.constructor = constructor
+        self.parent = parent
+        self.population = parent.population.copy() if parent else set()
+
+        for asm in constructor.asms:
             if asm.is_atom():
                 continue
             if asm not in self.population:
                 raise ValueError("All assemblies must be atoms or from the history's population")
 
-        self.asm = constructor(parent,
-                               [asm if not issubclass(asm.__class__, History) else asm.asm
-                                for asm in ctor_asms])
-        self.ctor_asms = ctor_asms
+        self.asm = constructor(parent.asm if parent else None)
         self.asm_idx = parent.asm_idx + 1 if parent else 0
         self.population.add(self.asm)
 
@@ -162,42 +183,26 @@ class History:
         if self.parent:
             ret = f"{self.parent}\n"
             ret += f"H[{self.asm_idx}]: {self.asm}, ("
-            ret += f"{', '.join([str(asm) if not issubclass(asm.__class__, History) else str(asm.asm) for asm in self.ctor_asms])}"
+            ret += f"{', '.join([str(asm) for asm in self.constructor.asms])}"
             ret += ")"
             return ret
         else:
             return f"H[{self.asm_idx}]: {self.asm}"
 
-# Pre-made constructors for convenience
-def AtomCtor(_, asms: list[Assembly]) -> Assembly:
-    if len(asms) != 1:
-        raise ValueError("AtomCtor expects exactly one assembly")
-    return asms[0]
-
-def StrAppendCtor(p: History, asms: list[Assembly]) -> Assembly:
-    if len(asms) != 1:
-        raise ValueError("StrAppendCtor expects exactly one assembly")
-    return p.asm.Append(asms[0])
-
-def StrPrependCtor(p: History, asms: list[Assembly]) -> Assembly:
-    if len(asms) != 1:
-        raise ValueError("StrPrependCtor expects exactly one assembly")
-    return asms[0].Append(p.asm)
-
 # type aliases
 StrAtom = StringAssembly.Atom
 
 if __name__ == "__main__":
-    a = History(AtomCtor, StrAtom('a'))
-    b = History(AtomCtor, StrAtom('b'))
-    r = History(AtomCtor, StrAtom('r'))
-    c = History(AtomCtor, StrAtom('c'))
-    d = History(AtomCtor, StrAtom('d'))
-    ab = History(StrAppendCtor, b, parent=a)
-    abr = History(StrAppendCtor, r, parent=ab)
-    abra = History(StrAppendCtor, a, parent=abr)
-    abrac = History(StrAppendCtor, c, parent=abra)
-    abraca = History(StrAppendCtor, a, parent=abrac)
-    abracad = History(StrAppendCtor, d, parent=abraca)
-    abracadabra = History(StrAppendCtor, abra, parent=abracad)
+    a = History(AtomCtor(StrAtom('a')))
+    b = History(AtomCtor(StrAtom('b')))
+    r = History(AtomCtor(StrAtom('r')))
+    c = History(AtomCtor(StrAtom('c')))
+    d = History(AtomCtor(StrAtom('d')))
+    ab = History(StrAppendCtor(b), parent=a)
+    abr = History(StrAppendCtor(r), parent=ab)
+    abra = History(StrAppendCtor(a), parent=abr)
+    abrac = History(StrAppendCtor(c), parent=abra)
+    abraca = History(StrAppendCtor(a), parent=abrac)
+    abracad = History(StrAppendCtor(d), parent=abraca)
+    abracadabra = History(StrAppendCtor(abra), parent=abracad)
     print(abracadabra)
