@@ -10,7 +10,7 @@ Contains code for modeling, and finding the optimal history of, assemblies in or
   * Currently, the only useful Assembly is a `StringAssembly`, but I'd like to add molecular assemblies as well. `StringAssembly` is a subclass of `Assembly` which is useful to encode the idea of joining strings. `networkx.Graph` objects have more degrees of freedom when composing graphs together. String assemblies look like `node - node - node ... - node`.
   * Atom assemblies are single element graphs, and can be created with `Assembly.Atom()` or `StringAssembly.Atom()` for string assemblies.
 * `Constructor` objects allow you to specify how to turn assemblies into other assemblies. You can accept assemblies to hold in the object and use them during construction.
-* `History` objects hold information about the lineage of an assembly. To make a `History` object, you need to pass in a set of assemblies, an (optional) parent, and a constructor.
+* `History` objects hold information about the lineage of an assembly. To make a `History` object, you need to pass in an (optional) parent, and a constructor.
   * If a parent is not specified, all assemblies must be atoms. If you attempt to use a constructor that has non-atom assemblies it will raise an error.
   * The `History` keep a memory of all assemblies created in this History chain of construction. This is called the `population` of assemblies for this history.
   * If you attempt to use a constructor with assemblies not in the current `population` it will raise an error.
