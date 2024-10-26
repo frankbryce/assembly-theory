@@ -1,25 +1,27 @@
 # Assembly Theory (Open Source Code)
 
-Working on algorithm to find complexity of arbitrary assemblies, modeled by networkx.Graph objects, as defined by https://en.wikipedia.org/wiki/Assembly_theory
-
-The current version of this models the differences between assemblies and string assemblies, and separates out the assembled object from its history, and abstracts the idea of construction to a lambda which can take parent assemblies as arguments.
+Contains code for modeling, and finding the optimal history of, assemblies in order to determine their assembly index as defined by https://en.wikipedia.org/wiki/Assembly_theory.
 
 ## Overview of Code Structure
 
-* `History` objects hold information about the lineage of an assembly. To make a `History` object, you need to pass in a set of assemblies, an (optional) parent, and a constructor.
-  * If a parent is not specified, all assemblies must be atoms.
-  * The constructor is a lambda which `History` will call with the assemblies passed in, and the parent (or `None` if none is provided). It will return the assembly that will be associated with this `History` object.
-* `Assembly` objects are wrappers of networkx Graph objects, and hold the actual assembly.
-  * Currently, the only useful Assembly is a `StringAssembly`, but I'd like to add molecular assemblies as well.
+![AssemblyTheoryDepOverview](https://raw.githubusercontent.com/frankbryce/assembly-theory/refs/heads/main/AssemblyTheoryDepOverview.png)
+
+* `Assembly` objects allow you to specify atoms, and also the ability to join assemblies together. The underlying datatype for this is a `networkx.Graph` object, but the `Assembly` object provides niceties like `__hash__` and `Join`. This is the base dependency for all other parts of the codebase.
+  * Currently, the only useful Assembly is a `StringAssembly`, but I'd like to add molecular assemblies as well. `StringAssembly` is a subclass of `Assembly` which is useful to encode the idea of joining strings. `networkx.Graph` objects have more degrees of freedom when composing graphs together. String assemblies look like `node - node - node ... - node`.
   * Atom assemblies are single element graphs, and can be created with `Assembly.Atom()` or `StringAssembly.Atom()` for string assemblies.
-* `AtomCtor`, `StrAppendCtor`, and `StrPrependCtor` are constructors for convenience, as specifying the lambdas is not great to build History objects yourself. I anticipate using more of these in the future when more assembly types are added.
-* `StringAssembly` is a subclass of `Assembly` which is useful to encode the idea of joining strings. `nx.Graph` objects have more degrees of freedom when composing graphs together. String assemblies look like `node - node - node ... - node`.
-* In `index.py`, `GenStrAsmIdx` is a generator which yields subsequently improved histories, as measured by the assembly index. It uses a priority queue to work through the assembly space. There is room for improvement here, as it can be quite slow for long strings. Being able to more efficiently discard Histories is a big opportunity for improvement.
+* `Constructor` objects allow you to specify how to turn assemblies into other assemblies. You can accept assemblies to hold in the object and use them during construction.
+* `History` objects hold information about the lineage of an assembly. To make a `History` object, you need to pass in a set of assemblies, an (optional) parent, and a constructor.
+  * If a parent is not specified, all assemblies must be atoms. If you attempt to use a constructor that has non-atom assemblies it will raise an error.
+  * The `History` keep a memory of all assemblies created in this History chain of construction. This is called the `population` of assemblies for this history.
+  * If you attempt to use a constructor with assemblies not in the current `population` it will raise an error.
+  * `History` will call the specified constructor with the parent assembly (or `None` if no parent is provided). It will return the assembly that will be associated with this `History` object.
+  * `History` tracks the assembly index of this history, by adding 1 each time, or starting at `0` if this is an atom history with no parent.
+* `AtomCtor`, `StrAppendCtor`, and `StrPrependCtor` are pre-made Constructors for convenience. As more `Assembly` types are added, more constructors will also be added.
+* In `index.py`, `GenStrAsmIdx` is a generator which yields subsequently improved histories, as measured by the assembly index. It uses a `heapq` priority queue to search through the space of `History` objects for a target string. There is room for improvement here, as it can be quite slow for long strings. Being able to more efficiently discard Histories is a big opportunity for improvement.
 
 ## `assembly.py`
 
-This file contains the basic definitions of the Assembly History objects, as well as a few constructors for string assemblies for
-convenience.
+This file contains the basic definitions of `Assembly`, `Constructor`, and `History` objects.
 
 I have a few tests written, which can be run with the following command:
 
@@ -34,25 +36,25 @@ constructed by many different `History`s.
 ```py
 # AtomCtor is a basic constructor for a single atom.
 # StrAtom is an alias for StringAssembly.Atom
-a = History(AtomCtor, StrAtom('a'))
-b = History(AtomCtor, StrAtom('b'))
-r = History(AtomCtor, StrAtom('r'))
-c = History(AtomCtor, StrAtom('c'))
-d = History(AtomCtor, StrAtom('d'))
+a = History(AtomCtor(StrAtom('a')))
+b = History(AtomCtor(StrAtom('b')))
+r = History(AtomCtor(StrAtom('r')))
+c = History(AtomCtor(StrAtom('c')))
+d = History(AtomCtor(StrAtom('d')))
 
 # StrAppendCtor is a constructor for appending an atom to a history's assembly.
 # If the assembly passed in is not in the parent History, it will raise an error..
-ab = History(StrAppendCtor, b, parent=a)
-abr = History(StrAppendCtor, r, parent=ab)
-abra = History(StrAppendCtor, a, parent=abr)
-abrac = History(StrAppendCtor, c, parent=abra)
-abraca = History(StrAppendCtor, a, parent=abrac)
-abracad = History(StrAppendCtor, d, parent=abraca)
-abracadabra = History(StrAppendCtor, abra, parent=abracad)
+ab = History(StrAppendCtor(b), parent=a)
+abr = History(StrAppendCtor(r), parent=ab)
+abra = History(StrAppendCtor(a), parent=abr)
+abrac = History(StrAppendCtor(c), parent=abra)
+abraca = History(StrAppendCtor(a), parent=abrac)
+abracad = History(StrAppendCtor(d), parent=abraca)
+abracadabra = History(StrAppendCtor(abra), parent=abracad)
 print(abracadabra)
 ```
 
-Currently, the output of assembly.py is a basic history of the example string from the wikipedia article.
+Currently, the output of `assembly.py` is a history of the example string from the wikipedia article, `"abracadabra"`.
 
 <details>
 <summary>`assembly.py` example output</summary>
@@ -73,8 +75,7 @@ H[7]: abracadabra, (abra)
 
 ## `index.py`
 
-This file contains the main algorithm for finding the minimum history to construct a string using string concatenation. It's
-quite slow for long strings, so the tests take a while to run (several minutes). They can be run with the following command:
+This file contains an algorithm for finding the minimum `History` to construct a string using string concatenation. It's slow for long strings, so the tests take a while to run (3-4 minutes on my machine). They can be run with the following command:
 
 ```bash
 $ python -m unittest index_test.py
