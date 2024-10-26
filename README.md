@@ -13,7 +13,7 @@ Contains code for modeling, and finding the optimal history of, assemblies in or
 * `History` objects hold information about the lineage of an assembly. To make a `History` object, you need to pass in an (optional) parent, and a constructor.
   * If a parent is not specified, all assemblies must be atoms. If you attempt to use a constructor that has non-atom assemblies it will raise an error.
   * The `History` keep a memory of all assemblies created in this History chain of construction. This is called the `population` of assemblies for this history.
-  * If you attempt to use a constructor with assemblies not in the current `population` it will raise an error.
+  * If you attempt to use a constructor with assemblies not in the current `population`, and are not atoms, it will raise an error.
   * `History` will call the specified constructor with the parent assembly (or `None` if no parent is provided). It will return the assembly that will be associated with this `History` object.
   * `History` tracks the assembly index of this history, by adding 1 each time, or starting at `0` if this is an atom history with no parent.
 * `AtomCtor`, `StrAppendCtor`, and `StrPrependCtor` are pre-made Constructors for convenience. As more `Assembly` types are added, more constructors will also be added.
